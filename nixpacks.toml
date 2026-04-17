@@ -2,4 +2,4 @@
 nixPkgs = ["php82", "php82Extensions.pdo_mysql", "php82Extensions.mbstring", "php82Extensions.xml", "php82Extensions.curl", "php82Extensions.zip", "php82Extensions.bcmath", "composer"]
 
 [start]
-cmd = "php artisan serve --host=0.0.0.0 --port=$PORT"
+cmd = "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"
