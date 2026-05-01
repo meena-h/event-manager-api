@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Reminder; 
 
 class Event extends Model
 {
@@ -22,9 +23,13 @@ class Event extends Model
         'event_date' => 'datetime',
     ];
 
-    // An event belongs to a user
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function reminders()
+    {
+        return $this->hasMany(Reminder::class);
     }
 }

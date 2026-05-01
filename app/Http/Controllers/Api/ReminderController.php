@@ -10,7 +10,6 @@ class ReminderController extends Controller
     // GET /api/reminders
     public function index(Request $request)
     {
-        // Validate all query parameters upfront
         $request->validate([
             'status'   => 'sometimes|in:pending,done,cancelled',
             'time'     => 'sometimes|in:upcoming,past',
@@ -20,83 +19,107 @@ class ReminderController extends Controller
             'per_page' => 'sometimes|integer|min:1|max:100',
         ]);
 
-        $query = $request->user()->reminders();
+        try {
+            $query = $request->user()->reminders()->with('event');
 
-        // --- Filter by status ---
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        // --- Filter by time ---
-        if ($request->filled('time')) {
-            $now = now();
-            if ($request->time === 'upcoming') {
-                $query->where('remind_at', '>=', $now);
-            } else {
-                $query->where('remind_at', '<', $now);
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
             }
+
+            if ($request->filled('time')) {
+                $now = now();
+                if ($request->time === 'upcoming') {
+                    $query->where('remind_at', '>=', $now);
+                } else {
+                    $query->where('remind_at', '<', $now);
+                }
+            }
+
+            if ($request->filled('search')) {
+                $keyword = $request->search;
+                $query->whereHas('event', function ($q) use ($keyword) {
+                    $q->where('title', 'like', "%{$keyword}%")
+                      ->orWhere('description', 'like', "%{$keyword}%");
+                });
+            }
+
+            $sortBy  = $request->input('sort_by', 'created_at');
+            $sortDir = $request->input('sort_dir', 'desc');
+            $query->orderBy($sortBy, $sortDir);
+
+            $perPage   = $request->input('per_page', 10);
+            $reminders = $query->paginate($perPage);
+
+            return response()->json([
+                'total'        => $reminders->total(),
+                'per_page'     => $reminders->perPage(),
+                'current_page' => $reminders->currentPage(),
+                'last_page'    => $reminders->lastPage(),
+                'reminders'    => $reminders->items(),
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        // --- Search by keyword in title or description ---
-        if ($request->filled('search')) {
-            $keyword = $request->search;
-            $query->where(function ($q) use ($keyword) {
-                $q->where('title', 'like', "%{$keyword}%")
-                  ->orWhere('description', 'like', "%{$keyword}%");
-            });
-        }
-
-        // --- Sorting ---
-        $sortBy  = $request->input('sort_by', 'created_at');
-        $sortDir = $request->input('sort_dir', 'desc');
-        $query->orderBy($sortBy, $sortDir);
-
-        // --- Pagination ---
-        $perPage   = $request->input('per_page', 10);
-        $reminders = $query->paginate($perPage);
-
-        return response()->json([
-            'total'        => $reminders->total(),
-            'per_page'     => $reminders->perPage(),
-            'current_page' => $reminders->currentPage(),
-            'last_page'    => $reminders->lastPage(),
-            'reminders'    => $reminders->items(),
-        ]);
     }
 
     // POST /api/reminders
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string|max:2000',
-            'remind_at'   => 'required|date|after:now',
+            'event_id'  => 'required|exists:events,id',
+            'remind_at' => 'required|date|after:now',
         ]);
 
-        $reminder = $request->user()->reminders()->create($validated);
+        $event = $request->user()->events()->find($validated['event_id']);
 
-        return response()->json([
-            'message'  => 'Reminder created successfully',
-            'reminder' => $reminder,
-        ], 201);
+        if (! $event) {
+            return response()->json(['message' => 'Event not found'], 404);
+        }
+
+        try {
+            $reminder = $request->user()->reminders()->create($validated);
+
+            return response()->json([
+                'message'  => 'Reminder created successfully',
+                'reminder' => $reminder->load('event'),
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 
     // GET /api/reminders/{id}
     public function show(Request $request, $id)
     {
-        $reminder = $request->user()->reminders()->find($id);
+        try {
+            $reminder = $request->user()->reminders()->with('event')->find($id);
 
-        if (! $reminder) {
-            return response()->json(['message' => 'Reminder not found'], 404);
+            if (! $reminder) {
+                return response()->json(['message' => 'Reminder not found'], 404);
+            }
+
+            return response()->json(['reminder' => $reminder]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json(['reminder' => $reminder]);
     }
 
     // PUT /api/reminders/{id}
     public function update(Request $request, $id)
     {
-        $reminder = $request->user()->reminders()->find($id);
+        $reminder = $request->user()->reminders()->with('event')->find($id);
 
         if (! $reminder) {
             return response()->json(['message' => 'Reminder not found'], 404);
@@ -109,17 +132,23 @@ class ReminderController extends Controller
         }
 
         $validated = $request->validate([
-            'title'       => 'sometimes|string|max:255',
-            'description' => 'nullable|string|max:2000',
-            'remind_at'   => 'sometimes|date|after:now',
+            'remind_at' => 'sometimes|date|after:now',
         ]);
 
-        $reminder->update($validated);
+        try {
+            $reminder->update($validated);
 
-        return response()->json([
-            'message'  => 'Reminder updated successfully',
-            'reminder' => $reminder,
-        ]);
+            return response()->json([
+                'message'  => 'Reminder updated successfully',
+                'reminder' => $reminder,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 
     // DELETE /api/reminders/{id}
@@ -131,8 +160,16 @@ class ReminderController extends Controller
             return response()->json(['message' => 'Reminder not found'], 404);
         }
 
-        $reminder->delete();
+        try {
+            $reminder->delete();
 
-        return response()->json(['message' => 'Reminder deleted successfully']);
+            return response()->json(['message' => 'Reminder deleted successfully']);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
 }

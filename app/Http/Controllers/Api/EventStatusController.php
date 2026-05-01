@@ -4,87 +4,112 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Exception;
 
 class EventStatusController extends Controller
 {
     // POST /api/events/{id}/done
     public function markDone(Request $request, $id)
     {
-        $event = $request->user()->events()->find($id);
+        try {
+            $event = $request->user()->events()->find($id);
 
-        if (! $event) {
-            return response()->json(['message' => 'Event not found'], 404);
-        }
+            if (! $event) {
+                return response()->json(['message' => 'Event not found'], 404);
+            }
 
-        if ($event->status === 'cancelled') {
+            if ($event->status === 'cancelled') {
+                return response()->json([
+                    'message' => 'Cannot change status of a cancelled event.',
+                ], 422);
+            }
+
+            if ($event->status === 'done') {
+                return response()->json([
+                    'message' => 'Event is already marked as done.',
+                ], 422);
+            }
+
+            $event->update(['status' => 'done']);
+
             return response()->json([
-                'message' => 'Cannot change status of a cancelled event.',
-            ], 422);
-        }
+                'message' => 'Event marked as done.',
+                'event'   => $event,
+            ]);
 
-        if ($event->status === 'done') {
+        } catch (Exception $e) {
             return response()->json([
-                'message' => 'Event is already marked as done.',
-            ], 422);
+                'message' => 'Failed to mark event as done',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        $event->update(['status' => 'done']);
-
-        return response()->json([
-            'message' => 'Event marked as done.',
-            'event'   => $event,
-        ]);
     }
 
     // POST /api/events/{id}/undone
     public function markUndone(Request $request, $id)
     {
-        $event = $request->user()->events()->find($id);
+        try {
+            $event = $request->user()->events()->find($id);
 
-        if (! $event) {
-            return response()->json(['message' => 'Event not found'], 404);
-        }
+            if (! $event) {
+                return response()->json(['message' => 'Event not found'], 404);
+            }
 
-        if ($event->status === 'cancelled') {
+            if ($event->status === 'cancelled') {
+                return response()->json([
+                    'message' => 'Cannot change status of a cancelled event.',
+                ], 422);
+            }
+
+            if ($event->status === 'pending') {
+                return response()->json([
+                    'message' => 'Event is already pending (not done).',
+                ], 422);
+            }
+
+            $event->update(['status' => 'pending']);
+
             return response()->json([
-                'message' => 'Cannot change status of a cancelled event.',
-            ], 422);
-        }
+                'message' => 'Event marked as not done.',
+                'event'   => $event,
+            ]);
 
-        if ($event->status === 'pending') {
+        } catch (Exception $e) {
             return response()->json([
-                'message' => 'Event is already pending (not done).',
-            ], 422);
+                'message' => 'Failed to mark event as undone',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        $event->update(['status' => 'pending']);
-
-        return response()->json([
-            'message' => 'Event marked as not done.',
-            'event'   => $event,
-        ]);
     }
 
     // POST /api/events/{id}/cancel
     public function cancel(Request $request, $id)
     {
-        $event = $request->user()->events()->find($id);
+        try {
+            $event = $request->user()->events()->find($id);
 
-        if (! $event) {
-            return response()->json(['message' => 'Event not found'], 404);
-        }
+            if (! $event) {
+                return response()->json(['message' => 'Event not found'], 404);
+            }
 
-        if ($event->status === 'cancelled') {
+            if ($event->status === 'cancelled') {
+                return response()->json([
+                    'message' => 'Event is already cancelled.',
+                ], 422);
+            }
+
+            $event->update(['status' => 'cancelled']);
+
             return response()->json([
-                'message' => 'Event is already cancelled.',
-            ], 422);
+                'message' => 'Event cancelled successfully.',
+                'event'   => $event,
+            ]);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => 'Failed to cancel event',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
-
-        $event->update(['status' => 'cancelled']);
-
-        return response()->json([
-            'message' => 'Event cancelled successfully.',
-            'event'   => $event,
-        ]);
     }
 }

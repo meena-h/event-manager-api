@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventStatusController;
 use App\Http\Controllers\Api\ReminderController;
 use App\Http\Controllers\Api\ReminderStatusController;
+use App\Http\Controllers\Api\InvoiceController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -41,4 +42,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/reminders/{id}/done',   [ReminderStatusController::class, 'markDone']);
     Route::post('/reminders/{id}/undone', [ReminderStatusController::class, 'markUndone']);
     Route::post('/reminders/{id}/cancel', [ReminderStatusController::class, 'cancel']);
+
+    // Invoices
+    Route::get('/invoices',              [InvoiceController::class, 'index']);
+    Route::post('/invoices',             [InvoiceController::class, 'store']);
+    Route::get('/invoices/{id}',         [InvoiceController::class, 'show']);
+    Route::get('/invoices/{id}/download',[InvoiceController::class, 'download']);
+
 });
